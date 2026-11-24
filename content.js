@@ -17,6 +17,7 @@ function initMarker() {
 
   let active = false;
   let recent = ['lemon', 'blue'];
+  let opId = 0;
   let popupHost = null;
   let panelHost = null;
   let panelOpen = false;
@@ -163,7 +164,7 @@ function initMarker() {
       recentRow(
         row,
         (name) => {
-          colorMark(mark, name);
+          sameGroup(mark).forEach((m) => colorMark(m, name));
           pushRecent(name);
           refreshPanel();
           dismissPopup();
@@ -172,7 +173,7 @@ function initMarker() {
       );
       const remove = el('button', '', 'Remove');
       remove.addEventListener('click', () => {
-        unwrapMark(mark);
+        sameGroup(mark).forEach(unwrapMark);
         refreshPanel();
         dismissPopup();
       });
@@ -191,9 +192,10 @@ function initMarker() {
     m.style.setProperty('background-color', COLOR[name], 'important');
   }
 
-  function makeMark(name) {
+  function makeMark(name, id) {
     const m = document.createElement('mark');
     m.className = MARK;
+    m.dataset.mkid = id;
     m.style.setProperty('color', '#1a1a1a', 'important');
     m.style.setProperty('border-radius', '2px', 'important');
     m.style.setProperty('padding', '0 1px', 'important');
@@ -211,7 +213,7 @@ function initMarker() {
   }
 
   function marksIntersecting(range) {
-    return [...document.querySelectorAll('mark.' + MARK)].filter((m) => {
+    const hits = [...document.querySelectorAll('mark.' + MARK)].filter((m) => {
       try {
         if (!range.intersectsNode(m)) return false;
         const r = document.createRange();
@@ -225,10 +227,35 @@ function initMarker() {
         return false;
       }
     });
+    // Touching one segment touches the whole logical highlight.
+    const ids = new Set(hits.map((m) => m.dataset.mkid).filter(Boolean));
+    if (!ids.size) return hits;
+    return [...document.querySelectorAll('mark.' + MARK)].filter((m) =>
+      ids.has(m.dataset.mkid)
+    );
+  }
+
+  function sameGroup(mark) {
+    const id = mark.dataset.mkid;
+    if (!id) return [mark];
+    return [...document.querySelectorAll('mark.' + MARK)].filter(
+      (m) => m.dataset.mkid === id
+    );
+  }
+
+  function groupedMarks() {
+    const groups = [];
+    for (const m of document.querySelectorAll('mark.' + MARK)) {
+      const last = groups[groups.length - 1];
+      if (last && last.id && last.id === m.dataset.mkid) last.marks.push(m);
+      else groups.push({ id: m.dataset.mkid, marks: [m] });
+    }
+    return groups;
   }
 
   function wrapRange(range, colorName) {
     for (const m of marksIntersecting(range)) unwrapMark(m);
+    const id = String(++opId);
 
     let root =
       range.commonAncestorContainer.nodeType === Node.TEXT_NODE
@@ -259,7 +286,7 @@ function initMarker() {
       const e = r.endOffset;
       const mid = node.splitText(s);
       mid.splitText(e - s);
-      const m = makeMark(colorName);
+      const m = makeMark(colorName, id);
       mid.parentNode.insertBefore(m, mid);
       m.appendChild(mid);
     }
@@ -278,11 +305,16 @@ function initMarker() {
       list.appendChild(el('div', 'empty', 'No highlights yet — select text to mark.'));
       return;
     }
-    for (const m of marks) {
+    for (const g of groupedMarks()) {
       const item = el('div', 'item');
       const dot = el('span', 'dot');
-      dot.style.backgroundColor = COLOR[m.dataset.color] ?? '#ccc';
-      const q = el('span', 'q', m.textContent.replace(/\s+/g, ' ').trim());
+      dot.style.backgroundColor = COLOR[g.marks[0].dataset.color] ?? '#ccc';
+      const text = g.marks
+        .map((m) => m.textContent)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const q = el('span', 'q', text);
       item.append(dot, q);
       list.appendChild(item);
     }
@@ -335,8 +367,16 @@ function initMarker() {
   }
 
   function copyAllQuotes() {
-    const text = [...document.querySelectorAll('mark.' + MARK)]
-      .map((m) => '- ' + m.textContent.replace(/\s+/g, ' ').trim())
+    const text = groupedMarks()
+      .map(
+        (g) =>
+          '- ' +
+          g.marks
+            .map((m) => m.textContent)
+            .join('')
+            .replace(/\s+/g, ' ')
+            .trim()
+      )
       .join('\n');
     if (!text) return;
     if (navigator.clipboard?.writeText) {
