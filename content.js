@@ -20,6 +20,7 @@ function initMarker() {
   let opId = 0;
   let popupHost = null;
   let popupAnchor = null;
+  let popupIsSelection = false;
   let panelHost = null;
   let panelOpen = false;
 
@@ -93,6 +94,7 @@ function initMarker() {
     popupHost?.remove();
     popupHost = null;
     popupAnchor = null;
+    popupIsSelection = false;
   }
 
   function positionPopup(h, rect) {
@@ -107,7 +109,7 @@ function initMarker() {
     h.style.top = y + 'px';
   }
 
-  function showPopup(rect, buildMain, anchor) {
+  function showPopup(rect, buildMain, anchor, isSelection) {
     dismissPopup();
     const { h, root } = host(CSS, {
       position: 'fixed',
@@ -115,11 +117,13 @@ function initMarker() {
       left: '0px',
       top: '0px',
     });
+    h.addEventListener('mousedown', (e) => e.preventDefault());
     const row = el('div', 'row');
     root.appendChild(row);
     buildMain(row);
     popupHost = h;
     popupAnchor = anchor ?? null;
+    popupIsSelection = !!isSelection;
     positionPopup(h, rect);
   }
 
@@ -157,7 +161,12 @@ function initMarker() {
         recentRow(
           row,
           (name) => {
-            wrapRange(range, name);
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+              dismissPopup();
+              return;
+            }
+            wrapRange(sel.getRangeAt(0), name);
             pushRecent(name);
             dismissPopup();
           },
@@ -165,7 +174,8 @@ function initMarker() {
         );
         row.appendChild(cancelBtn());
       },
-      range
+      range,
+      true
     );
   }
 
@@ -192,7 +202,8 @@ function initMarker() {
         });
         row.append(remove, cancelBtn());
       },
-      mark
+      mark,
+      false
     );
   }
 
@@ -436,6 +447,23 @@ function initMarker() {
     }
   }
 
+  function onMouseDown(e) {
+    if (!popupHost || popupIsSelection || e.target.dataset?.marker) return;
+    dismissPopup();
+  }
+
+  function onSelectionChange() {
+    if (!popupHost || !popupIsSelection) return;
+    const sel = window.getSelection();
+    const insideUI = sel?.anchorNode?.getRootNode?.()?.host?.dataset?.marker;
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0 || insideUI) {
+      dismissPopup();
+      return;
+    }
+    popupAnchor = sel.getRangeAt(0);
+    positionPopup(popupHost, popupAnchor.getBoundingClientRect());
+  }
+
   function onKeyDown(e) {
     if (e.key === 'Escape') {
       if (popupHost) dismissPopup();
@@ -460,8 +488,10 @@ function initMarker() {
     active = true;
     document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('click', onClick, true);
+    document.addEventListener('mousedown', onMouseDown, true);
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    document.addEventListener('selectionchange', onSelectionChange);
   }
 
   function deactivate() {
@@ -472,8 +502,10 @@ function initMarker() {
     [...document.querySelectorAll('mark.' + MARK)].forEach(unwrapMark);
     document.removeEventListener('mouseup', onMouseUp);
     document.removeEventListener('click', onClick, true);
+    document.removeEventListener('mousedown', onMouseDown, true);
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('scroll', onScroll, { capture: true, passive: true });
+    document.removeEventListener('selectionchange', onSelectionChange);
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
