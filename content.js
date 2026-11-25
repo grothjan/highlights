@@ -19,6 +19,7 @@ function initMarker() {
   let recent = ['lemon', 'blue'];
   let opId = 0;
   let popupHost = null;
+  let popupAnchor = null;
   let panelHost = null;
   let panelOpen = false;
 
@@ -91,9 +92,22 @@ function initMarker() {
   function dismissPopup() {
     popupHost?.remove();
     popupHost = null;
+    popupAnchor = null;
   }
 
-  function showPopup(rect, buildMain) {
+  function positionPopup(h, rect) {
+    const w = h.offsetWidth;
+    const hh = h.offsetHeight;
+    let x = rect.left + rect.width / 2 - w / 2;
+    x = Math.max(8, Math.min(x, window.innerWidth - w - 8));
+    let y = rect.top - hh - 8;
+    if (y < 8) y = rect.bottom + 8;
+    y = Math.min(y, window.innerHeight - hh - 8);
+    h.style.left = x + 'px';
+    h.style.top = y + 'px';
+  }
+
+  function showPopup(rect, buildMain, anchor) {
     dismissPopup();
     const { h, root } = host(CSS, {
       position: 'fixed',
@@ -105,15 +119,8 @@ function initMarker() {
     root.appendChild(row);
     buildMain(row);
     popupHost = h;
-    const w = h.offsetWidth;
-    const hh = h.offsetHeight;
-    let x = rect.left + rect.width / 2 - w / 2;
-    x = Math.max(8, Math.min(x, window.innerWidth - w - 8));
-    let y = rect.top - hh - 8;
-    if (y < 8) y = rect.bottom + 8;
-    y = Math.min(y, window.innerHeight - hh - 8);
-    h.style.left = x + 'px';
-    h.style.top = y + 'px';
+    popupAnchor = anchor ?? null;
+    positionPopup(h, rect);
   }
 
   function paletteRow(row, onPick, current) {
@@ -144,41 +151,49 @@ function initMarker() {
 
   function showSelectionPopup(range) {
     const rect = range.getBoundingClientRect();
-    showPopup(rect, (row) => {
-      recentRow(
-        row,
-        (name) => {
-          wrapRange(range, name);
-          pushRecent(name);
-          dismissPopup();
-        },
-        recent[0]
-      );
-      row.appendChild(cancelBtn());
-    });
+    showPopup(
+      rect,
+      (row) => {
+        recentRow(
+          row,
+          (name) => {
+            wrapRange(range, name);
+            pushRecent(name);
+            dismissPopup();
+          },
+          recent[0]
+        );
+        row.appendChild(cancelBtn());
+      },
+      range
+    );
   }
 
   function showMarkPopup(mark) {
     const rect = mark.getBoundingClientRect();
-    showPopup(rect, (row) => {
-      recentRow(
-        row,
-        (name) => {
-          sameGroup(mark).forEach((m) => colorMark(m, name));
-          pushRecent(name);
+    showPopup(
+      rect,
+      (row) => {
+        recentRow(
+          row,
+          (name) => {
+            sameGroup(mark).forEach((m) => colorMark(m, name));
+            pushRecent(name);
+            refreshPanel();
+            dismissPopup();
+          },
+          mark.dataset.color
+        );
+        const remove = el('button', '', 'Remove');
+        remove.addEventListener('click', () => {
+          sameGroup(mark).forEach(unwrapMark);
           refreshPanel();
           dismissPopup();
-        },
-        mark.dataset.color
-      );
-      const remove = el('button', '', 'Remove');
-      remove.addEventListener('click', () => {
-        sameGroup(mark).forEach(unwrapMark);
-        refreshPanel();
-        dismissPopup();
-      });
-      row.append(remove, cancelBtn());
-    });
+        });
+        row.append(remove, cancelBtn());
+      },
+      mark
+    );
   }
 
   function pushRecent(name) {
@@ -404,7 +419,6 @@ function initMarker() {
 
   function onMouseUp(e) {
     if (e.button !== 0 || e.target.dataset?.marker) return;
-    dismissPopup();
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
@@ -422,10 +436,6 @@ function initMarker() {
     }
   }
 
-  function onMouseDown(e) {
-    if (popupHost && e.target !== popupHost) dismissPopup();
-  }
-
   function onKeyDown(e) {
     if (e.key === 'Escape') {
       if (popupHost) dismissPopup();
@@ -434,7 +444,15 @@ function initMarker() {
   }
 
   function onScroll() {
-    dismissPopup();
+    if (!popupHost || !popupAnchor) return;
+    let rect;
+    try {
+      rect = popupAnchor.getBoundingClientRect();
+    } catch {
+      return;
+    }
+    if (!rect || (rect.width === 0 && rect.height === 0)) return;
+    positionPopup(popupHost, rect);
   }
 
   function activate() {
@@ -442,9 +460,8 @@ function initMarker() {
     active = true;
     document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('click', onClick, true);
-    document.addEventListener('mousedown', onMouseDown, true);
     document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('scroll', onScroll, true);
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
   }
 
   function deactivate() {
@@ -455,9 +472,8 @@ function initMarker() {
     [...document.querySelectorAll('mark.' + MARK)].forEach(unwrapMark);
     document.removeEventListener('mouseup', onMouseUp);
     document.removeEventListener('click', onClick, true);
-    document.removeEventListener('mousedown', onMouseDown, true);
     document.removeEventListener('keydown', onKeyDown, true);
-    document.removeEventListener('scroll', onScroll, true);
+    document.removeEventListener('scroll', onScroll, { capture: true, passive: true });
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
