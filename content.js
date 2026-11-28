@@ -35,6 +35,10 @@ function initMarker() {
       border: 1px solid rgba(0,0,0,.28); flex: none; }
     .sw.cur { box-shadow: 0 0 0 2px var(--mk-acc); }
     .sw:hover { transform: scale(1.12); }
+    .sw.more { display: flex; align-items: center; justify-content: center;
+      gap: 2px; padding: 0; }
+    .sw.more span { width: 3px; height: 3px; border-radius: 50%;
+      background: var(--mk-fg); }
     button { font: inherit; color: inherit; background: none; border: none;
       cursor: pointer; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
     button:hover { background: var(--mk-hover); }
@@ -142,7 +146,9 @@ function initMarker() {
       s.addEventListener('click', () => onPick(name));
       row.appendChild(s);
     });
-    const pick = el('button', '', 'Pick color');
+    const pick = el('button', 'sw more');
+    pick.title = 'Pick color';
+    pick.append(el('span'), el('span'), el('span'));
     pick.addEventListener('click', () => paletteRow(row, onPick, current));
     row.appendChild(pick);
   }

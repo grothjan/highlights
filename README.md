@@ -13,7 +13,7 @@ live only in the tab you're reading.
   for the current tab (`ON` badge). Click again to remove all highlights and
   switch off.
 - **Select to mark** — selecting text opens a small popup: your two
-  most-recent colors as circles, `Pick color` for the full pastel palette,
+  most-recent colors as circles, a `···` circle for the full pastel palette,
   and `Cancel`.
 - **Click a highlight** — same popup, plus `Remove`. Picking another swatch
   recolors the highlight.
@@ -36,8 +36,8 @@ live only in the tab you're reading.
 ## Usage
 
 1. Click the **toolbar icon** on the page you want to annotate.
-2. **Select text** → click a color circle to highlight, or `Pick color` for
-   the full palette.
+2. **Select text** → click a color circle to highlight, or the `···` circle
+   for the full palette.
 3. **Click a highlight** to change its color or `Remove` it.
 4. **Right-click the page** → `Highlights` to open the notes panel.
 5. When done, `Copy all`, paste into your notes app, then `Clear all`.
